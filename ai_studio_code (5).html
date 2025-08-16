@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task To Earn</title>
+
+    <!-- External CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Internal CSS Styles -->
+    <style>
+        :root {
+            --dark-bg: #121212;
+            --dark-card: #1f2937;
+            --dark-nav: #111827;
+            --green-accent: #4ade80;
+            --green-dark: #16a34a;
+            --text-light: #e0e0e0;
+            --text-muted: #9ca3af;
+            --border-color: #374151;
+            --status-pending: #facc15; /* yellow-400 */
+            --status-approved: #4ade80; /* green-400 */
+            --status-rejected: #f87171; /* red-400 */
+        }
+        body {
+            background-color: var(--dark-bg);
+            color: var(--text-light);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .main-content { flex-grow: 1; }
+        .nav-button.active { color: var(--green-accent); border-color: var(--green-accent); }
+        .daily-reward-grid { display: flex; justify-content: space-between; gap: 0.5rem; }
+        .reward-day {
+            background-color: var(--dark-card);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            text-align: center;
+            padding: 0.75rem 0.5rem;
+            flex-grow: 1;
+            transition: all 0.2s ease;
+        }
+        .reward-day.claimed { background-color: var(--green-dark); border-color: var(--green-accent); }
+        .reward-day.claimable { background-color: #374151; border-color: var(--green-accent); cursor: pointer; }
+        .reward-day.claimable:hover { transform: translateY(-3px); }
+        .reward-day.locked { opacity: 0.6; }
+        .swiper-container {
+            position: relative; width: 100%; height: 120px;
+            background-color: var(--dark-card); border-radius: 0.75rem;
+            overflow: hidden; border: 2px solid var(--border-color);
+        }
+        .swiper-pointer {
+            position: absolute; top: -5px; left: 50%;
+            transform: translateX(-50%); width: 0; height: 0;
+            border-left: 15px solid transparent; border-right: 15px solid transparent;
+            border-top: 20px solid var(--green-accent); z-index: 10;
+        }
+        #swiper-track {
+            display: flex; height: 100%; position: absolute;
+            left: 0; top: 0;
+            transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+        .swiper-card {
+            width: 100px; height: 100px; margin: 10px 5px;
+            background-color: var(--dark-nav); border-radius: 0.5rem;
+            display: flex; flex-direction: column; justify-content: center;
+            align-items: center; font-size: 1.5rem; font-weight: bold;
+            color: var(--green-accent); border: 1px solid var(--border-color);
+        }
+        .swiper-card i { font-size: 1.2rem; color: var(--text-muted); }
+        .task-card:not(.disabled):hover { transform: translateY(-5px); border-color: var(--green-accent); }
+        .task-card { background-color: #1f2937; border-radius: 0.75rem; padding: 1.5rem; transition: all 0.2s ease-in-out; border: 1px solid #374151;}
+        .task-card.disabled { opacity: 0.5; cursor: not-allowed; }
+        .hidden { display: none; }
+        .withdrawal-item { background-color: #374151; padding: 0.75rem 1rem; border-radius: 0.5rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;}
+        .status-badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.8rem; font-weight: bold; text-transform: capitalize; }
+        .status-pending { background-color: var(--status-pending); color: var(--dark-bg); }
+        .status-approved { background-color: var(--status-approved); color: var(--dark-bg); }
+        .status-rejected { background-color: var(--status-rejected); color: white; }
+    </style>
+</head>
+<body class="font-sans">
+
+    <!-- Auth Section -->
+    <div id="auth-section" class="main-content container mx-auto p-4 flex items-center justify-center">
+        <div class="max-w-md w-full">
+            <!-- Login Form -->
+            <div id="login-form" class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-white text-center mb-6">Login</h2>
+                <input id="login-email" type="email" placeholder="Email" class="w-full bg-gray-700 text-white p-3 rounded mb-4">
+                <input id="login-password" type="password" placeholder="Password" class="w-full bg-gray-700 text-white p-3 rounded mb-4">
+                <button id="login-button" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700">Login</button>
+                <p class="text-center text-gray-400 mt-4">
+                    Don't have an account? <a href="#" id="show-signup" class="text-green-400 hover:underline">Sign Up</a>
+                </p>
+            </div>
+
+            <!-- Signup Form -->
+            <div id="signup-form" class="hidden bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-white text-center mb-6">Sign Up</h2>
+                <input id="signup-username" type="text" placeholder="Username" class="w-full bg-gray-700 text-white p-3 rounded mb-4">
+                <input id="signup-email" type="email" placeholder="Email" class="w-full bg-gray-700 text-white p-3 rounded mb-4">
+                <input id="signup-password" type="password" placeholder="Password" class="w-full bg-gray-700 text-white p-3 rounded mb-4">
+                <input id="signup-password-confirm" type="password" placeholder="Confirm Password" class="w-full bg-gray-700 text-white p-3 rounded mb-4">
+                <input id="signup-referral" type="text" placeholder="Referral Code (Optional)" class="w-full bg-gray-700 text-white p-3 rounded mb-4">
+                <button id="signup-button" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700">Sign Up</button>
+                <p class="text-center text-gray-400 mt-4">
+                    Already have an account? <a href="#" id="show-login" class="text-green-400 hover:underline">Login</a>
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Email Verification Section -->
+    <div id="email-verification-section" class="hidden main-content container mx-auto p-4 flex items-center justify-center">
+        <div class="max-w-md w-full text-center bg-gray-800 p-8 rounded-lg shadow-lg">
+            <i class="fas fa-envelope-open-text text-6xl text-green-400 mb-4"></i>
+            <h2 class="text-3xl font-bold text-white mb-4">Verify Your Email</h2>
+            <p class="text-gray-300 mb-6">
+                We have sent a verification link to your email address. Please click the link to continue.
+            </p>
+            <p class="text-gray-400 mb-6">Didn't receive an email? Check your spam folder or wait a moment.</p>
+            <div class="text-2xl font-mono text-yellow-400 mb-8" id="verification-timer">01:00</div>
+            <button id="go-to-login-button" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700">Go to Login</button>
+        </div>
+    </div>
+
+
+    <!-- Main App Section -->
+    <div id="app-section" class="hidden">
+        <!-- Top Header -->
+        <header class="bg-gray-900 p-4 text-white shadow-lg sticky top-0 z-20">
+            <div class="container mx-auto flex justify-between items-center">
+                <h1 id="header-greeting" class="text-xl font-bold text-green-400">Task To Earn</h1>
+                <div class="flex items-center">
+                    <div class="text-lg text-right mr-4">
+                        <span class="font-semibold">Coins:</span>
+                        <span id="points-display" class="font-bold text-xl text-green-400">0</span>
+                    </div>
+                    <button id="logout-button" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="main-content container mx-auto p-4">
+            <!-- Page 1: Tasks -->
+            <div id="tasks-page">
+
+                <!-- Daily Rewards Section -->
+                <div class="bg-gray-800 p-4 rounded-lg mb-6">
+                    <h2 class="text-2xl font-bold text-white mb-4">Daily Check-in</h2>
+                    <div id="daily-reward-grid" class="daily-reward-grid"></div>
+                </div>
+
+                <!-- Swiper Spin Section -->
+                <div class="bg-gray-800 p-4 rounded-lg mb-6">
+                    <h2 class="text-2xl font-bold text-white mb-4">Spin & Win</h2>
+                    <div class="swiper-container">
+                        <div class="swiper-pointer"></div>
+                        <div id="swiper-track"></div>
+                    </div>
+                    <button id="spin-button" class="mt-4 w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition duration-200 disabled:bg-gray-500">SPIN</button>
+                </div>
+
+                <!-- Social Tasks -->
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h2 class="text-2xl font-bold text-white mb-4">Social Tasks</h2>
+                    <main class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <a id="task-tiktok" href="https://www.tiktok.com/@aliff0091?_t=ZS-8y7oAp7fyie&_r=1" target="_blank" class="task-card flex flex-col items-center justify-center text-center text-red-400"><i class="fa-brands fa-tiktok text-5xl mb-2"></i><h3 class="text-lg font-semibold text-white">TikTok</h3></a>
+                        <a id="task-whatsapp" href="https://whatsapp.com/channel/0029VagFlJe0G0XkYkYLm73l" target="_blank" class="task-card flex flex-col items-center justify-center text-center text-green-400"><i class="fa-brands fa-whatsapp text-5xl mb-2"></i><h3 class="text-lg font-semibold text-white">WhatsApp</h3></a>
+                        <a id="task-telegram" href="https://t.me/spiderai009" target="_blank" class="task-card flex flex-col items-center justify-center text-center text-blue-400"><i class="fa-brands fa-telegram text-5xl mb-2"></i><h3 class="text-lg font-semibold text-white">Telegram</h3></a>
+                        <a id="task-youtube" href="https://youtube.com/@spiderai0091?si=nUfQcLq3YlxQAILb" target="_blank" class="task-card flex flex-col items-center justify-center text-center text-red-500"><i class="fa-brands fa-youtube text-5xl mb-2"></i><h3 class="text-lg font-semibold text-white">YouTube</h3></a>
+                    </main>
+                </div>
+            </div>
+
+            <!-- Page 2: Withdrawal -->
+            <div id="withdrawal-page" class="hidden">
+                <div class="bg-gray-800 p-6 rounded-lg max-w-lg mx-auto">
+                    <h2 class="text-3xl font-bold text-white text-center mb-6">Wallet & Withdrawal</h2>
+                    <div class="bg-gray-700 p-4 rounded-lg text-center mb-6">
+                        <p class="text-gray-400 text-lg">Your Total Coins</p>
+                        <p id="wallet-points-display" class="text-4xl font-bold text-green-400">0</p>
+                    </div>
+
+                    <div class="text-center mb-6">
+                        <button id="withdraw-button" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 disabled:bg-gray-500">Request Withdrawal</button>
+                        <p class="text-gray-500 text-sm mt-2">Minimum 100 coins to withdraw.</p>
+                    </div>
+                    
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold text-white mb-2 text-center">Your Referral Code</h3>
+                        <div class="flex items-center bg-gray-900 border border-gray-600 rounded-lg p-2">
+                            <input id="referral-code-display" type="text" value="Loading..." class="bg-transparent text-gray-300 w-full outline-none" readonly>
+                            <button id="copy-button" class="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700">Copy</button>
+                        </div>
+                    </div>
+
+                    <!-- Withdrawal History -->
+                    <div>
+                        <h3 class="text-2xl font-bold text-white mb-4 text-center">Withdrawal History</h3>
+                        <div id="withdrawal-history-container" class="space-y-3">
+                            <!-- History items will be injected here by JavaScript -->
+                             <p id="no-history-msg" class="text-center text-gray-500">You have no withdrawal requests.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="bg-gray-900 p-2 shadow-lg sticky bottom-0 z-20">
+            <div class="container mx-auto flex justify-around">
+                <button id="nav-tasks" class="nav-button active flex-1 text-center p-2 border-b-2 border-transparent"><i class="fas fa-tasks mr-2"></i> Tasks</button>
+                <button id="nav-withdrawal" class="nav-button flex-1 text-center p-2 border-b-2 border-transparent"><i class="fas fa-wallet mr-2"></i> Wallet</button>
+            </div>
+        </nav>
+    </div>
+
+<script type="module">
+    // --- FIREBASE SDK IMPORTS ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendEmailVerification } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+    import { getDatabase, ref, set, get, onValue, push, serverTimestamp, query, orderByChild, equalTo, runTransaction } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
+
+    // --- FIREBASE CONFIGURATION ---
+    // IMPORTANT: Replace this with your own Firebase project configuration.
+    const firebaseConfig = {
+      apiKey: "AIzaSyC9dFB9q7vX87cx_n451PaN1Fbqp9-mZDI",
+      authDomain: "earningapps-74984.firebaseapp.com",
+      databaseURL: "https://earningapps-74984-default-rtdb.firebaseio.com",
+      projectId: "earningapps-74984",
+      storageBucket: "earningapps-74984.firebasestorage.app",
+      messagingSenderId: "941001258779",
+      appId: "1:941001258779:web:c385c406573a64e40645be",
+      measurementId: "G-65FKEH7K50"
+    };
+
+    // --- INITIALIZE FIREBASE ---
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const database = getDatabase(app);
+
+    // --- CONFIGURATION ---
+    const POINTS_PER_TASK = 10;
+    const REFERRAL_BONUS = 50;
+    const MIN_WITHDRAWAL_POINTS = 100;
+    const DAILY_REWARDS = [5, 5, 7, 7, 8, 8, 10];
+    const SPINNER_REWARDS = [5, 10, 2, 8, 15, 0, 3, 7];
+    const CARD_WIDTH = 110;
+
+    // --- DOM ELEMENTS ---
+    const authSection = document.getElementById('auth-section');
+    const appSection = document.getElementById('app-section');
+    const emailVerificationSection = document.getElementById('email-verification-section');
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+    const loginButton = document.getElementById('login-button');
+    const signupButton = document.getElementById('signup-button');
+    const logoutButton = document.getElementById('logout-button');
+    const showSignup = document.getElementById('show-signup');
+    const showLogin = document.getElementById('show-login');
+    const goToLoginButton = document.getElementById('go-to-login-button');
+    const verificationTimer = document.getElementById('verification-timer');
+    const pointsDisplay = document.getElementById('points-display'), walletPointsDisplay = document.getElementById('wallet-points-display');
+    const tasksPage = document.getElementById('tasks-page'), withdrawalPage = document.getElementById('withdrawal-page');
+    const navTasks = document.getElementById('nav-tasks'), navWithdrawal = document.getElementById('nav-withdrawal');
+    const withdrawButton = document.getElementById('withdraw-button'), copyButton = document.getElementById('copy-button');
+    const referralCodeDisplay = document.getElementById('referral-code-display');
+    const dailyRewardGrid = document.getElementById('daily-reward-grid');
+    const spinButton = document.getElementById('spin-button');
+    const swiperTrack = document.getElementById('swiper-track');
+    const socialTaskLinks = document.querySelectorAll('#tasks-page main a');
+    const headerGreeting = document.getElementById('header-greeting');
+    const withdrawalHistoryContainer = document.getElementById('withdrawal-history-container');
+    const noHistoryMsg = document.getElementById('no-history-msg');
+
+
+    // --- STATE MANAGEMENT ---
+    let currentUser = null;
+    let userData = {};
+    let isSpinning = false;
+    let dbRefUser = null;
+    let verificationTimerInterval = null;
+
+    // --- AUTHENTICATION ---
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            if (user.emailVerified) {
+                currentUser = user;
+                dbRefUser = ref(database, 'users/' + currentUser.uid);
+                
+                authSection.classList.add('hidden');
+                emailVerificationSection.classList.add('hidden');
+                appSection.classList.remove('hidden');
+                
+                listenForUserData();
+                listenForWithdrawals();
+
+                setupSpinner();
+                showPage('tasks');
+            } else {
+                // User is signed in but email is not verified
+                authSection.classList.add('hidden');
+                appSection.classList.add('hidden');
+                emailVerificationSection.classList.remove('hidden');
+                startVerificationTimer(); // Show verification page if they reload
+            }
+        } else {
+            currentUser = null;
+            authSection.classList.remove('hidden');
+            appSection.classList.add('hidden');
+            emailVerificationSection.classList.add('hidden');
+        }
+    });
+
+    loginButton.addEventListener('click', () => {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        signInWithEmailAndPassword(auth, email, password)
+            .then(userCredential => {
+                 if (!userCredential.user.emailVerified) {
+                    alert("Please verify your email first. A new verification email has been sent.");
+                    sendEmailVerification(userCredential.user);
+                    signOut(auth);
+                 }
+            })
+            .catch(error => alert(`Login Failed: ${error.message}`));
+    });
+
+    signupButton.addEventListener('click', async () => {
+        const email = document.getElementById('signup-email').value;
+        const password = document.getElementById('signup-password').value;
+        const confirmPassword = document.getElementById('signup-password-confirm').value;
+        const username = document.getElementById('signup-username').value;
+        const referralCode = document.getElementById('signup-referral').value.trim();
+
+        if (!username || username.length < 3) {
+            alert('Please enter a valid username (at least 3 characters).');
+            return;
+        }
+        if (password !== confirmPassword) {
+            alert('Passwords do not match.');
+            return;
+        }
+        if (password.length < 6) {
+            alert('Password should be at least 6 characters.');
+            return;
+        }
+
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+
+            // Send verification email
+            await sendEmailVerification(user);
+
+            // Handle referral if code is provided
+            if (referralCode) {
+                await applyReferral(referralCode, user.uid);
+            }
+
+            // Create new user profile in the database
+            const userRef = ref(database, 'users/' + user.uid);
+            set(userRef, {
+                profile: {
+                    username: username,
+                    email: user.email,
+                    createdAt: serverTimestamp(),
+                    referralCode: user.uid.substring(0, 8) // Generate a unique referral code
+                },
+                coins: 0,
+                completedTasks: {},
+                dailyClaim: {
+                    streak: 0,
+                    lastClaimed: null
+                }
+            });
+
+            // Show verification page
+            authSection.classList.add('hidden');
+            emailVerificationSection.classList.remove('hidden');
+            startVerificationTimer();
+
+        } catch (error) {
+            alert(`Signup Failed: ${error.message}`);
+        }
+    });
+
+    async function applyReferral(referralCode, newUserId) {
+        const usersRef = ref(database, 'users');
+        const q = query(usersRef, orderByChild('profile/referralCode'), equalTo(referralCode));
+        
+        const snapshot = await get(q);
+        if (snapshot.exists()) {
+            const referrerData = snapshot.val();
+            const referrerId = Object.keys(referrerData)[0];
+            const referrerUser = referrerData[referrerId];
+
+            if (referrerId === newUserId) {
+                 console.log("User cannot use their own referral code.");
+                 return;
+            }
+
+            // Award bonus to the referrer using a transaction
+            const referrerCoinsRef = ref(database, `users/${referrerId}/coins`);
+            await runTransaction(referrerCoinsRef, (currentCoins) => {
+                return (currentCoins || 0) + REFERRAL_BONUS;
+            });
+            console.log(`Awarded ${REFERRAL_BONUS} coins to referrer ${referrerUser.profile.username}`);
+        } else {
+            console.log("Referral code not found.");
+        }
+    }
+
+
+    logoutButton.addEventListener('click', () => {
+        signOut(auth);
+    });
+
+    showSignup.addEventListener('click', (e) => {
+        e.preventDefault();
+        loginForm.classList.add('hidden');
+        signupForm.classList.remove('hidden');
+    });
+
+    showLogin.addEventListener('click', (e) => {
+        e.preventDefault();
+        signupForm.classList.add('hidden');
+        loginForm.classList.remove('hidden');
+    });
+
+    goToLoginButton.addEventListener('click', () => {
+        signOut(auth); // Log out the unverified user so they can log in fresh
+        emailVerificationSection.classList.add('hidden');
+        authSection.classList.remove('hidden');
+        loginForm.classList.remove('hidden');
+        signupForm.classList.add('hidden');
+        if(verificationTimerInterval) clearInterval(verificationTimerInterval);
+    });
+
+    function startVerificationTimer() {
+        if(verificationTimerInterval) clearInterval(verificationTimerInterval);
+
+        let duration = 60;
+        verificationTimerInterval = setInterval(() => {
+            const minutes = String(Math.floor(duration / 60)).padStart(2, '0');
+            const seconds = String(duration % 60).padStart(2, '0');
+            verificationTimer.textContent = `${minutes}:${seconds}`;
+
+            if (--duration < 0) {
+                clearInterval(verificationTimerInterval);
+                verificationTimer.textContent = "00:00";
+            }
+        }, 1000);
+    }
+
+    // --- DATABASE LISTENERS ---
+    function listenForUserData() {
+        if (!dbRefUser) return;
+        onValue(dbRefUser, (snapshot) => {
+            if (snapshot.exists()) {
+                userData = snapshot.val();
+            } else {
+                console.log("No user data found, might need initialization.");
+                userData = { coins: 0, completedTasks: {}, dailyClaim: { streak: 0, lastClaimed: null }, profile: {} };
+            }
+            updateUI();
+            setupDailyRewards();
+        });
+    }
+
+    function listenForWithdrawals() {
+        if (!currentUser) return;
+        const requestsQuery = query(ref(database, 'withdrawalRequests'), orderByChild('userId'), equalTo(currentUser.uid));
+        
+        onValue(requestsQuery, (snapshot) => {
+            const requests = [];
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                    requests.push({ id: childSnapshot.key, ...childSnapshot.val() });
+                });
+            }
+            renderWithdrawalHistory(requests.reverse());
+        });
+    }
+
+    // --- UI RENDERING ---
+    function updateUI() {
+        const coins = userData.coins || 0;
+        const profile = userData.profile || {};
+        const completedTasks = userData.completedTasks || {};
+
+        headerGreeting.textContent = `Hi, ${profile.username || 'User'}!`;
+        pointsDisplay.textContent = coins;
+        walletPointsDisplay.textContent = coins;
+        referralCodeDisplay.value = profile.referralCode || 'N/A';
+        
+        withdrawButton.disabled = coins < MIN_WITHDRAWAL_POINTS;
+        withdrawButton.textContent = withdrawButton.disabled ? 'Minimum 100 Coins' : `Request Withdrawal (${coins} Coins)`;
+        
+        Object.keys(completedTasks).forEach(taskId => {
+            const taskEl = document.getElementById(`task-${taskId}`);
+            if (taskEl) {
+                taskEl.classList.add('disabled');
+            }
+        });
+    }
+    
+    function renderWithdrawalHistory(requests) {
+        withdrawalHistoryContainer.innerHTML = ''; // Clear previous items
+        if (requests.length === 0) {
+            noHistoryMsg.classList.remove('hidden');
+            return;
+        }
+        
+        noHistoryMsg.classList.add('hidden');
+
+        requests.forEach(req => {
+            const item = document.createElement('div');
+            item.className = 'withdrawal-item';
+            
+            const reqDate = new Date(req.requestedAt).toLocaleDateString("en-US");
+            
+            item.innerHTML = `
+                <div>
+                    <p class="font-bold text-white">${req.amount} Coins</p>
+                    <p class="text-sm text-gray-400">${reqDate}</p>
+                </div>
+                <span class="status-badge status-${req.status.toLowerCase()}">${req.status}</span>
+            `;
+            withdrawalHistoryContainer.appendChild(item);
+        });
+    }
+
+    function showPage(page) {
+        tasksPage.classList.toggle('hidden', page !== 'tasks');
+        withdrawalPage.classList.toggle('hidden', page !== 'withdrawal');
+        navTasks.classList.toggle('active', page === 'tasks');
+        navWithdrawal.classList.toggle('active', page === 'withdrawal');
+    }
+
+    // --- TASK & REWARD FUNCTIONS ---
+    function completeTask(taskId) {
+        if (!currentUser || (userData.completedTasks && userData.completedTasks[taskId])) return;
+        
+        const newCoins = (userData.coins || 0) + POINTS_PER_TASK;
+        set(ref(database, `users/${currentUser.uid}/coins`), newCoins);
+        set(ref(database, `users/${currentUser.uid}/completedTasks/${taskId}`), true);
+
+        const taskCard = document.getElementById(`task-${taskId}`).querySelector('h3');
+        const originalText = taskCard.textContent;
+        taskCard.textContent = `+${POINTS_PER_TASK} Points!`;
+        setTimeout(() => { taskCard.textContent = originalText; }, 1500);
+    }
+
+    function isToday(dateString) {
+        if (!dateString) return false;
+        const date = new Date(dateString);
+        const today = new Date();
+        return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate();
+    }
+
+    function setupDailyRewards() {
+        dailyRewardGrid.innerHTML = '';
+        const dailyClaim = userData.dailyClaim || { streak: 0, lastClaimed: null };
+        const canClaimToday = !isToday(dailyClaim.lastClaimed);
+        let streak = dailyClaim.streak % 7;
+
+        DAILY_REWARDS.forEach((reward, index) => {
+            const dayEl = document.createElement('div');
+            dayEl.classList.add('reward-day');
+            dayEl.innerHTML = `<div class="font-bold text-sm">Day ${index + 1}</div><div class="text-lg text-green-400">${reward}</div>`;
+            if (index < streak) {
+                dayEl.classList.add('claimed');
+            } else if (index === streak && canClaimToday) {
+                dayEl.classList.add('claimable');
+                dayEl.onclick = () => claimDailyReward(reward);
+            } else {
+                dayEl.classList.add('locked');
+            }
+            dailyRewardGrid.appendChild(dayEl);
+        });
+    }
+
+    function claimDailyReward(reward) {
+        if (!currentUser) return;
+        const newCoins = (userData.coins || 0) + reward;
+        const newStreak = (userData.dailyClaim.streak || 0) + 1;
+        
+        set(ref(database, `users/${currentUser.uid}/coins`), newCoins);
+        set(ref(database, `users/${currentUser.uid}/dailyClaim`), {
+            streak: newStreak,
+            lastClaimed: new Date().toISOString()
+        });
+    }
+
+    function setupSpinner() {
+        swiperTrack.innerHTML = '';
+        const fullTrack = [...SPINNER_REWARDS, ...SPINNER_REWARDS, ...SPINNER_REWARDS];
+        fullTrack.forEach(reward => {
+            const card = document.createElement('div');
+            card.classList.add('swiper-card');
+            card.innerHTML = `${reward} <i class="fas fa-coins"></i>`;
+            swiperTrack.appendChild(card);
+        });
+    }
+
+    function spinTheWheel() {
+        if (isSpinning || !currentUser) return;
+        isSpinning = true;
+        spinButton.disabled = true;
+
+        const cardsInTrack = SPINNER_REWARDS.length;
+        const targetCardIndex = Math.floor(Math.random() * cardsInTrack) + cardsInTrack;
+        const containerWidth = swiperTrack.parentElement.offsetWidth;
+        const targetPosition = (targetCardIndex * CARD_WIDTH) - (containerWidth / 2) + (CARD_WIDTH / 2);
+        const randomOffset = (Math.random() - 0.5) * (CARD_WIDTH * 0.8);
+        const finalPosition = targetPosition + randomOffset;
+        
+        swiperTrack.style.transition = 'transform 4s cubic-bezier(0.25, 0.1, 0.25, 1)';
+        swiperTrack.style.transform = `translateX(-${finalPosition}px)`;
+        
+        setTimeout(() => {
+            isSpinning = false;
+            spinButton.disabled = false;
+            const actualCardIndex = targetCardIndex % cardsInTrack;
+            const reward = SPINNER_REWARDS[actualCardIndex];
+            
+            if (reward > 0) {
+                const newCoins = (userData.coins || 0) + reward;
+                set(ref(database, `users/${currentUser.uid}/coins`), newCoins);
+                alert(`Congratulations! You won ${reward} coins!`);
+            } else {
+                alert('Better luck next time!');
+            }
+            
+            swiperTrack.style.transition = 'none';
+            const resetPosition = finalPosition % (cardsInTrack * CARD_WIDTH);
+            swiperTrack.style.transform = `translateX(-${resetPosition}px)`;
+        }, 4100);
+    }
+
+    function copyReferralCode() {
+        navigator.clipboard.writeText(referralCodeDisplay.value).then(() => {
+            copyButton.textContent = 'Copied!';
+            setTimeout(() => { copyButton.textContent = 'Copy'; }, 2000);
+        });
+    }
+
+    // --- EVENT LISTENERS ---
+    navTasks.addEventListener('click', () => showPage('tasks'));
+    navWithdrawal.addEventListener('click', () => showPage('withdrawal'));
+    spinButton.addEventListener('click', spinTheWheel);
+    copyButton.addEventListener('click', copyReferralCode);
+
+    withdrawButton.addEventListener('click', () => {
+        if (!currentUser || (userData.coins || 0) < MIN_WITHDRAWAL_POINTS) return;
+        
+        const amountToWithdraw = userData.coins;
+        const withdrawalRequestsRef = ref(database, 'withdrawalRequests');
+        
+        push(withdrawalRequestsRef, {
+            userId: currentUser.uid,
+            amount: amountToWithdraw,
+            status: 'pending',
+            requestedAt: serverTimestamp()
+        }).then(() => {
+            // Only after the request is successfully created, deduct the coins.
+            set(ref(database, `users/${currentUser.uid}/coins`), 0);
+            alert(`Your withdrawal request for ${amountToWithdraw} coins has been submitted! You can check its status in the Wallet.`);
+        }).catch((error) => {
+            console.error("Withdrawal request failed: ", error);
+            alert("There was an error submitting your request. Please try again.");
+        });
+    });
+
+    socialTaskLinks.forEach(link => {
+        link.addEventListener('click', (event) => {
+            event.preventDefault(); // Prevent default link navigation
+            const taskId = link.id.replace('task-', '');
+            const url = link.href;
+            if (!userData.completedTasks || !userData.completedTasks[taskId]) {
+                completeTask(taskId);
+                window.open(url, '_blank'); // Manually open the link
+            } else {
+                 window.open(url, '_blank');
+            }
+        });
+    });
+</script>
+</body>
+</html>
